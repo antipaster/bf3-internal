@@ -1,13 +1,11 @@
 # Battlefield 3 Internal Cheat
 
 
----
 
-## Status
+## Screenshots
 
-**Status:** ![Status](https://img.shields.io/badge/undetected-brightgreen?style=flat-square) 
-Date: 03.07.2025
-Safe to use on pb
+
+![yea](resources/screenshot.jpg)
 
 ---
 ## Features
@@ -24,14 +22,7 @@ Safe to use on pb
 - **ImGui Menu**: Modern, customizable in-game menu for all features.
 - **Debug Tools**: Print all entities, view memory usage, and more.
 
----
 
-## Screenshots
-
-
-![yea](resources/screenshot.jpg)
-
----
 
 ## Getting Started
 
