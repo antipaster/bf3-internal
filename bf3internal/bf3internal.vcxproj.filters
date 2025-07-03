@@ -1,0 +1,112 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="main">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="main\xdd">
+      <UniqueIdentifier>{af2748ba-2059-423a-a119-795e2a1fa051}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Main.cpp">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="minhook\buffer.c">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="minhook\hde\hde32.c">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="minhook\hook.c">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui.cpp">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui_demo.cpp">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\backends\imgui_impl_dx11.cpp">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui_draw.cpp">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\backends\imgui_impl_win32.cpp">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui_tables.cpp">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui_widgets.cpp">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="minhook\trampoline.c">
+      <Filter>main\xdd</Filter>
+    </ClCompile>
+    <ClCompile Include="EntityPrinter.cpp">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="ESP.cpp">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="Aimbot.cpp">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="Functions.cpp">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="NameSpoofer.cpp">
+      <Filter>main</Filter>
+    </ClCompile>
+    <ClCompile Include="PBBypass.cpp">
+      <Filter>main</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Functions.h">
+      <Filter>main\xdd</Filter>
+    </ClInclude>
+    <ClInclude Include="Drawing.h">
+      <Filter>main\xdd</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imconfig.h">
+      <Filter>main\xdd</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imgui.h">
+      <Filter>main\xdd</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\backends\imgui_impl_dx11.h">
+      <Filter>main\xdd</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\backends\imgui_impl_win32.h">
+      <Filter>main\xdd</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imgui_internal.h">
+      <Filter>main\xdd</Filter>
+    </ClInclude>
+    <ClInclude Include="minhook\hde\table32.h">
+      <Filter>main\xdd</Filter>
+    </ClInclude>
+    <ClInclude Include="VMTHook.h">
+      <Filter>main\xdd</Filter>
+    </ClInclude>
+    <ClInclude Include="EntityPrinter.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="ESP.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="NameSpoofer.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="PBBypass.h">
+      <Filter>main</Filter>
+    </ClInclude>
+    <ClInclude Include="Aimbot.h">
+      <Filter>main</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
