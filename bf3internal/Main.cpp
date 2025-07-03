@@ -263,7 +263,7 @@ signed int __stdcall hkPresent(int a1, int a2, int a3)
 					ImGui::Checkbox("Enable Aimbot", &g_AimbotConfig.enabled);
 					if (g_AimbotConfig.enabled) {
 						ImGui::SameLine();
-						ImGui::TextColored(ImVec4(0.0f, 0.9f, 0.5f, 1.0f), "● ACTIVE");
+						ImGui::TextColored(ImVec4(0.0f, 0.9f, 0.5f, 1.0f), " ACTIVE");
 					}
 					
 					ImGui::Checkbox("Triggerbot", &g_AimbotConfig.triggerbot);
