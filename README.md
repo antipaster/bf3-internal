@@ -43,7 +43,7 @@
 4. **Inject the resulting DLL (`bf3internal.dll`) into the Battlefield 3 process.**  
    Use [Xenos](https://github.com/DarthTon/Xenos) or Processhacker for injecting.
 
-5.⚠️ **Pack the DLL with Themida or VMProtect**
+5. ⚠️ **Pack the DLL with Themida or VMProtect** 
    Use themida or vmprotect or anything else to pack the dll.
 ---
 
