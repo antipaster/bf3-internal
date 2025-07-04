@@ -7,7 +7,6 @@
 
 ![yea](resources/screenshot.jpg)
 
-https://www.youtube.com/watch?v=bha7FCvnBZc
 ---
 ## Features
 
@@ -62,3 +61,6 @@ https://www.youtube.com/watch?v=bha7FCvnBZc
 - [TsudaKageyu/minhook](https://github.com/TsudaKageyu/minhook) - MinHook library
 - Frostbite SDK structures by CypherPresents
 
+
+showcase:
+https://www.youtube.com/watch?v=bha7FCvnBZc
