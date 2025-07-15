@@ -5,7 +5,7 @@
 ## Screenshots
 
 
-![yea](resources/screenshot.jpg)
+![yea](resources/screenshot2.jpg)
 
 ---
 ## Features
@@ -64,3 +64,7 @@
 
 showcase:
 https://www.youtube.com/watch?v=bha7FCvnBZc
+
+
+old screenshot:
+![yea](resources/screenshot.jpg)
