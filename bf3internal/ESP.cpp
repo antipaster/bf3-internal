@@ -4,27 +4,101 @@
 #include <cstdio>
 #include <imgui.h>
 #include <cmath>
+#include <set>
 
+ESPConfig g_ESPConfig;
+VehicleESPConfig g_VehicleESPConfig;
+
+
+static inline fb::Color32 ImVec4ToColor32(const ImVec4& v) {
+    return fb::Color32((int)(v.x * 255.0f), (int)(v.y * 255.0f), (int)(v.z * 255.0f), (int)(v.w * 255.0f));
+}
 
 bool showPlayerNames = true;
 bool showOffscreenPointers = true;
 
-extern struct ESPConfig {
-    bool enabled;
-    bool showBoxes;
-    bool showHealthBars;
-    bool showNames;
-    bool showDistance;
-    bool showHealthText;
-    bool showTeammates;
-    bool showEnemies;
-    float maxDistance;
-    float boxThickness;
-    bool showPlayerNames = true;
-    bool showOffscreenPointers = true;
-} g_ESPConfig;
-
 namespace ESP {
+
+    // fucked something here
+    void RenderVehicleESP() {
+        if (!g_VehicleESPConfig.enabled) return;
+        fb::ClientGameContext* g_pGameContext = fb::ClientGameContext::Singleton();
+        if (!g_pGameContext) return;
+        fb::ClientPlayerManager* pPlayerManager = g_pGameContext->m_clientPlayerManager;
+        if (!pPlayerManager || pPlayerManager->m_players.empty()) return;
+        fb::ClientPlayer* pLocalPlayer = pPlayerManager->m_localPlayer;
+        if (!pLocalPlayer) return;
+        eastl::vector<fb::ClientPlayer*> pVecCP = pPlayerManager->m_players;
+        std::set<fb::ClientVehicleEntity*> renderedVehicles;
+        for (int i = 0; i < pVecCP.size(); i++) {
+            fb::ClientPlayer* pClientPlayer = pVecCP.at(i);
+            if (!pClientPlayer) continue;
+            fb::ClientVehicleEntity* pVehicle = GetVehicle(pClientPlayer);
+            if (!pVehicle || renderedVehicles.count(pVehicle)) continue;
+            renderedVehicles.insert(pVehicle);
+            fb::PhysicsEntity* pPE = pVehicle->m_physicsEntity;
+            fb::Vec3 vehiclePos = {0,0,0};
+            if (pPE) {
+                vehiclePos = pPE->position();
+            }
+            fb::Vec3 screenPos;
+            if (!ProjectToScreen(&vehiclePos, &screenPos)) continue;
+            float distance = 0.0f;
+            if (pLocalPlayer->m_soldier.GetData()) {
+                distance = pLocalPlayer->m_soldier.GetData()->m_replicatedController->m_state.position.DistanceFrom(vehiclePos);
+            }
+            if (distance > g_VehicleESPConfig.maxDistance) continue;
+            float baseDistance = 10.0f;
+            float scale = baseDistance / (distance > 0.1f ? distance : 0.1f);
+            if (scale < 0.1f) scale = 0.1f;
+            if (scale > 2.0f) scale = 2.0f;
+            float baseWidth = 120.0f;
+            float baseHeight = 60.0f;
+            float boxWidth = baseWidth * scale;
+            float boxHeight = baseHeight * scale;
+            float x = screenPos.x - boxWidth / 2;
+            float y = screenPos.y - boxHeight / 2;
+            float w = boxWidth;
+            float h = boxHeight;
+            fb::Color32 color = ImVec4ToColor32(g_VehicleESPConfig.boxColor);
+
+            if (g_VehicleESPConfig.showBoxes) {
+                DrawBox2D(x, y, w, h, color);
+            }
+            if (g_VehicleESPConfig.showHealthBars && pVehicle->m_vehicleHealth && !pVehicle->m_vehicleHealth->m_healthZones.empty()) {
+                float health = pVehicle->m_vehicleHealth->m_healthZones[0].health;
+                float maxHealth = pVehicle->m_vehicleHealth->m_healthZones[0].data ? pVehicle->m_vehicleHealth->m_healthZones[0].data->m_maxHealth : 100.0f;
+                DrawHealthBar(x, y - 10 * scale, w, health, maxHealth, ImVec4ToColor32(g_VehicleESPConfig.healthBarColor));
+            }
+   
+            float textX = x + w + 5 * scale;
+            float textY = y;
+            float textSpacing = 15 * scale;
+            if (g_VehicleESPConfig.showNames) {
+                char* vName = GetVehicleName(pClientPlayer);
+                char nameText[64] = "Vehicle";
+                if (vName && vName[0]) snprintf(nameText, sizeof(nameText), "%s", vName);
+                DrawText2D(textX, textY, ImVec4ToColor32(g_VehicleESPConfig.nameColor), nameText, scale);
+                textY += textSpacing;
+            }
+   
+            if (g_VehicleESPConfig.showDistance) {
+                char distText[32];
+                snprintf(distText, sizeof(distText), "%.0fm", distance);
+                DrawText2D(textX, textY, color, distText, scale);
+                textY += textSpacing;
+            }
+     
+            if (g_VehicleESPConfig.showHealthText && pVehicle->m_vehicleHealth && !pVehicle->m_vehicleHealth->m_healthZones.empty()) {
+                float health = pVehicle->m_vehicleHealth->m_healthZones[0].health;
+                float maxHealth = pVehicle->m_vehicleHealth->m_healthZones[0].data ? pVehicle->m_vehicleHealth->m_healthZones[0].data->m_maxHealth : 100.0f;
+                char healthText[32];
+                snprintf(healthText, sizeof(healthText), "%.0f/%.0f", health, maxHealth);
+                DrawText2D(textX, textY, color, healthText, scale);
+            }
+        }
+    }
+
     void RenderESP() {
         fb::ClientGameContext* g_pGameContext = fb::ClientGameContext::Singleton();
         if (!g_pGameContext) {
@@ -82,6 +156,9 @@ namespace ESP {
                 }
             }
         }
+        if (g_VehicleESPConfig.enabled) {
+            ESP::RenderVehicleESP();
+        }
     }
 
     void DrawPlayerESP(fb::ClientPlayer* player, fb::ClientSoldierEntity* soldier, fb::Vec3& screenPos, float distance) {
@@ -110,9 +187,9 @@ namespace ESP {
         float h = boxHeight;
 
         bool isTeammate = (pLocalPlayer->m_teamId == player->m_teamId);
-        fb::Color32 color = isTeammate 
-            ? fb::Color32(0, 255, 0, 255) 
-            : (soldier->m_isOccluded ? fb::Color32(255, 255, 0, 255) : fb::Color32(255, 0, 0, 255));
+        fb::Color32 color = isTeammate
+            ? ImVec4ToColor32(g_ESPConfig.boxColorTeammate)
+            : (soldier->m_isOccluded ? ImVec4ToColor32(g_ESPConfig.boxColorOccluded) : ImVec4ToColor32(g_ESPConfig.boxColorEnemy));
 
   
         if (g_ESPConfig.showBoxes) {
@@ -123,7 +200,7 @@ namespace ESP {
             float health = soldier->m_health;
             float maxHealth = soldier->maxHealth();
             if (maxHealth > 0) {
-                DrawHealthBar(x, y - 10 * scale, w, health, maxHealth);
+                DrawHealthBar(x, y - 10 * scale, w, health, maxHealth, ImVec4ToColor32(g_ESPConfig.healthBarColor));
             }
         }
 
@@ -135,8 +212,8 @@ namespace ESP {
       
         if (g_ESPConfig.showNames) {
             char nameText[64];
-            sprintf_s(nameText, "%s", player->am_name ? player->am_name : "Unknown");
-            DrawText2D(textX, textY, color, nameText, scale);
+            sprintf_s(nameText, "%s", player->m_name.c_str());
+            DrawText2D(textX, textY, ImVec4ToColor32(g_ESPConfig.nameColor), nameText, scale);
             textY += textSpacing;
         }
 
@@ -157,7 +234,7 @@ namespace ESP {
         }
 
         if (g_ESPConfig.showPlayerNames) {
-            DrawPlayerName(player, x + w / 2, y - 20.0f, color, 1.0f);
+            DrawPlayerName(player, x + w / 2, y - 20.0f, ImVec4ToColor32(g_ESPConfig.nameColor), 1.0f);
         }
     }
 
@@ -165,7 +242,7 @@ namespace ESP {
         fb::DebugRenderer2::Singleton()->DrawBox2D(x, y, w, h, color);
     }
 
-    void DrawHealthBar(float x, float y, float w, float health, float maxHealth) {
+    void DrawHealthBar(float x, float y, float w, float health, float maxHealth, fb::Color32 color) {
         if (maxHealth <= 0) return;
         
         float healthPercent = health / maxHealth;
@@ -175,7 +252,7 @@ namespace ESP {
         
 
         if (barWidth > 0) {
-            fb::DebugRenderer2::Singleton()->DrawBox2D(x, y, barWidth, 5, fb::Color32(0, 255, 0, 255));
+            fb::DebugRenderer2::Singleton()->DrawBox2D(x, y, barWidth, 5, color);
         }
     }
 
@@ -188,7 +265,7 @@ namespace ESP {
         return ProjectToScreen(&worldPos, &screenPos);
     }
 
-    void DrawOffscreenPointer(const fb::Vec3& screenCenter, const fb::Vec3& targetWorld, fb::Color32 color) {
+    void DrawOffscreenPointer(const fb::Vec3& screenCenter, const fb::Vec3& targetWorld, fb::Color32 /*color*/) {
     
         float screenWidth = ImGui::GetIO().DisplaySize.x;
         float screenHeight = ImGui::GetIO().DisplaySize.y;
@@ -235,15 +312,16 @@ namespace ESP {
         right = rotate(right);
 
         ImDrawList* draw = ImGui::GetForegroundDrawList();
-        ImU32 col = IM_COL32(color.R, color.G, color.B, color.A);
-        draw->AddTriangleFilled(tip, left, right, col);
+        fb::Color32 col = ImVec4ToColor32(g_ESPConfig.offscreenPointerColor);
+        ImU32 imCol = IM_COL32(col.R, col.G, col.B, col.A);
+        draw->AddTriangleFilled(tip, left, right, imCol);
         draw->AddTriangle(tip, left, right, IM_COL32(0,0,0,180), 2.0f);
     }
 
     void DrawPlayerName(fb::ClientPlayer* player, float x, float y, fb::Color32 color, float /*scale*/) {
         if (!player) return;
         char nameText[64];
-        sprintf_s(nameText, "%s", player->am_name ? player->am_name : "Unknown");
+        sprintf_s(nameText, "%s", player->m_name.c_str());
 
         DrawText2D(x, y - 20.0f, color, nameText, 1.0f);
     }

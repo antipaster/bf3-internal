@@ -36,6 +36,7 @@
     <ClInclude Include="EntityPrinter.h" />
     <ClInclude Include="ESP.h" />
     <ClInclude Include="Functions.h" />
+    <ClInclude Include="ImguiManger.h" />
     <ClInclude Include="imgui\backends\imgui_impl_dx11.h" />
     <ClInclude Include="imgui\backends\imgui_impl_win32.h" />
     <ClInclude Include="imgui\imconfig.h" />
@@ -45,6 +46,9 @@
     <ClInclude Include="NameSpoofer.h" />
     <ClInclude Include="PBBypass.h" />
     <ClInclude Include="VMTHook.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="assets\SF-Pro-Display-Regular.otf" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{A56475CE-CF5E-42BE-A402-96C7350EE4B0}</ProjectGuid>

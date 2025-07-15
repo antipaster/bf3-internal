@@ -8,6 +8,9 @@
     <Filter Include="main\xdd">
       <UniqueIdentifier>{af2748ba-2059-423a-a119-795e2a1fa051}</UniqueIdentifier>
     </Filter>
+    <Filter Include="main\imguishit">
+      <UniqueIdentifier>{3d12eda9-3bfc-42ab-8943-24ac7ce30f80}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -108,5 +111,13 @@
     <ClInclude Include="Aimbot.h">
       <Filter>main</Filter>
     </ClInclude>
+    <ClInclude Include="ImguiManger.h">
+      <Filter>main\imguishit</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="assets\SF-Pro-Display-Regular.otf">
+      <Filter>main</Filter>
+    </Font>
   </ItemGroup>
 </Project>

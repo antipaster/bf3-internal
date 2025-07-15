@@ -144,6 +144,10 @@ extern DWORD MINIMAP;
 
 extern  DWORD GET_CLIENTPLAYER_SCORE;
 
+#ifndef GET_CLIENTPLAYER_SCORE
+#define GET_CLIENTPLAYER_SCORE 0x11638F0 // Correct offset for getScoreByPlayer
+#endif
+
 #endif
 
 

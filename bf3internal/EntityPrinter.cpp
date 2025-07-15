@@ -3,6 +3,9 @@
 #include <Windows.h>
 #include <cstdio>
 
+
+
+// we pray to chatgpt 🙏
 namespace EntityPrinter {
     void PrintAllEntities() {
         OutputDebugStringA("[EntityPrinter] Starting entity print...\n");

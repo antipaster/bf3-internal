@@ -3,8 +3,10 @@
 #include "FB SDK/ClientCameraContext.h"
 #include "FB SDK/CameraContext.h"
 #include "FB SDK/Enumerations.h"
+#include "FB SDK/SoldierEntityData.h"
 
 #include "VMTHook.h"
+#include "ImguiManger.h"
 #include "Functions.h"
 #include "Drawing.h"
 #include "EntityPrinter.h"
@@ -48,7 +50,7 @@ tPresent oPresent = nullptr;
 using ResizeBuffers_t = HRESULT(__stdcall*)(IDXGISwapChain*, UINT, UINT, UINT, DXGI_FORMAT, UINT);
 ResizeBuffers_t oResizeBuffers = nullptr;
 
-// Globals for ImGui + DX11
+
 ID3D11Device*           g_pd3dDevice = nullptr;
 ID3D11DeviceContext*    g_pd3dDeviceContext = nullptr;
 IDXGISwapChain*         g_pSwapChain = nullptr;
@@ -62,20 +64,6 @@ bool g_InsertPressed = false;
 bool g_ESPEnabled = false;
 
 
-struct ESPConfig {
-    bool enabled = false;
-    bool showBoxes = true;
-    bool showHealthBars = true;
-    bool showNames = true;
-    bool showDistance = true;
-    bool showHealthText = true;
-    bool showTeammates = false;
-    bool showEnemies = true;
-    float maxDistance = 300.0f;
-    float boxThickness = 2.0f;
-    bool showPlayerNames = false;
-    bool showOffscreenPointers = false;
-} g_ESPConfig;
 
 
 struct CombatConfig {
@@ -87,17 +75,46 @@ struct CombatConfig {
     float aimbotSmooth = 1.0f;
 } g_CombatConfig;
 
+struct WorldConfig {
+    bool enabled = false;
+    
+    bool removeShadows = false;
+    bool removeFoliage = false;
+    bool removeSky = false;
+    bool removeSun = false;
+    bool removeReflections = false;
+    bool removeBloom = false;
+    bool removeMotionBlur = false;
+    bool removeDepthOfField = false;
+    
+    bool enablePerformanceMode = false;
+
+    bool debugMultiView = false;
+    bool debugDrawDepth = false;
+    bool debugDrawEmitters = false;
+} g_WorldConfig;
+
+struct unlocks {
+    bool unlockAll = false;
+    bool unlockAllExtras = false; 
+    bool spoofUnlockChecks = false; 
+} g_unlocks;
+
 
 extern MiscConfig g_MiscConfig;
 
 bool g_ThirdPerson = false;
 bool g_F3Pressed = false;
 
+
+
+
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 HWND GetSwapChainHWND(IDXGISwapChain* pSwapChain);
 
 void PrintAllEntitiesToConsole();
+void ApplyWorldColors();
 
 LRESULT CALLBACK CustomWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_KEYDOWN && wParam == VK_INSERT) {
@@ -114,23 +131,31 @@ LRESULT CALLBACK CustomWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
     return CallWindowProc(g_OriginalWndProc, hWnd, msg, wParam, lParam);
 }
 
+
+extern "C" __declspec(dllexport) bool __stdcall alwaysTrue() { return true; }
+
 int WINAPI hkPreFrame(float DeltaTime)
 {
 	_asm pushad
+
+
+
 	int returnval = oPreFrameUpdate(DeltaTime);
 
 
 	static int frameCounter = 0;
 	frameCounter++;
 	
-	//if (g_AimbotConfig.enabled) {
-	//	if (frameCounter % 100 == 0) printf("[Main] Calling UpdateAimbot (frame %d)\n", frameCounter);
-	//	Aimbot::UpdateAimbot();
-	//}
-	//if (g_AimbotConfig.triggerbot) {
-	//	if (frameCounter % 100 == 0) printf("[Main] Calling UpdateTriggerbot (frame %d)\n", frameCounter);
-	//	Triggerbot::UpdateTriggerbot();
-	//}
+	if (g_AimbotConfig.enabled) {
+		Aimbot::UpdateAimbot();
+	}
+	if (g_AimbotConfig.triggerbot) {
+		Triggerbot::UpdateTriggerbot();
+	}
+	
+	if (g_WorldConfig.enabled) {
+		ApplyWorldColors();
+	}
 	
 
 	if (g_CombatConfig.noRecoil || g_CombatConfig.noSpread) {
@@ -159,7 +184,50 @@ int WINAPI hkPreFrame(float DeltaTime)
 	}
 
 
+	if (g_unlocks.unlockAll || g_unlocks.unlockAllExtras || g_unlocks.spoofUnlockChecks) {
+		fb::ClientGameContext* g_pGameContext = fb::ClientGameContext::Singleton();
+		if (POINTERCHK(g_pGameContext)) {
+			fb::ClientPlayerManager* pPlayerManager = g_pGameContext->m_clientPlayerManager;
+			if (POINTERCHK(pPlayerManager)) {
+				fb::ClientPlayer* pLocalPlayer = pPlayerManager->m_localPlayer;
+				if (POINTERCHK(pLocalPlayer)) {
+					if (g_unlocks.unlockAll) {
+						int wordCount = pLocalPlayer->m_unlocksBitArray.m_wordCount;
+						if (pLocalPlayer->m_unlocksBitArray.m_bits) {
+							for (int i = 0; i < wordCount; ++i) {
+								pLocalPlayer->m_unlocksBitArray.m_bits[i] = 0xFFFFFFFF;
+							}
+						}
+					}
+					if (g_unlocks.unlockAllExtras) {
+						int wordCount = pLocalPlayer->m_unlocksBitArray.m_wordCount;
+						if (pLocalPlayer->m_unlocksBitArray.m_bits) {
+							for (int i = 0; i < wordCount; ++i) {
+								pLocalPlayer->m_unlocksBitArray.m_bits[i] = 0xFFFFFFFF;
+							}
+						}
+					}
+					if (g_unlocks.spoofUnlockChecks) {
+						static bool patched = false;
+						if (!patched) {
+							uintptr_t* vtable = *(uintptr_t**)pLocalPlayer;
+							DWORD oldProtect = 0;
+							VirtualProtect(&vtable[11], sizeof(void*) * 2, PAGE_EXECUTE_READWRITE, &oldProtect);
+							vtable[11] = (uintptr_t)&alwaysTrue;
+							vtable[12] = (uintptr_t)&alwaysTrue;
+							VirtualProtect(&vtable[11], sizeof(void*) * 2, oldProtect, &oldProtect);
+							patched = true;
+							printf("Patched hasUnlockAsset/isUnlocked to always return true\n");
+						}
+					}
+				}
+			}
+		}
+	}
+
+
 	if (GetAsyncKeyState(VK_F3) & 0x8000) {
+		// doesnt work idk why i keept it 
 		if (!g_F3Pressed) {
 			g_ThirdPerson = !g_ThirdPerson;
 			printf("[Main] Third Person toggled: %s\n", g_ThirdPerson ? "ON" : "OFF");
@@ -189,13 +257,36 @@ signed int __stdcall hkPresent(int a1, int a2, int a3)
 			ImGui::CreateContext();
 			ImGui_ImplWin32_Init(g_hWnd);
 			ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
-			// Install custom WndProc
 			g_OriginalWndProc = (WNDPROC)SetWindowLongPtr(g_hWnd, GWLP_WNDPROC, (LONG_PTR)CustomWndProc);
 			g_ImGuiInitialized = true;
-			OutputDebugStringA("[Main] ImGui initialized!\n");
+			OutputDebugStringA("ImGui initialized!\n");
 			PBBypass::Initialize(g_pd3dDevice, g_pd3dDeviceContext, pSwapChain);
 		} else {
-			OutputDebugStringA("[Main] Failed to initialize ImGui!\n");
+			OutputDebugStringA("Failed to initialize ImGui!\n");
+		}
+	}
+	if (g_ImGuiInitialized) {
+		static bool fontLoaded = false;
+		if (!fontLoaded) {
+			ImGuiIO& io = ImGui::GetIO();
+			ImFont* font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\arial.ttf", 16.0f);
+			if (!font) {
+				OutputDebugStringA("[Main] Could not load font: C:\\Windows\\Fonts\\arial.ttf\n");
+			} else {
+				OutputDebugStringA("[Main] Loaded system font: Arial\n");
+				ImGuiStyle& style = ImGui::GetStyle();
+				style.ScaleAllSizes(0.8);
+				if (style.WindowBorderHoverPadding <= 0.0f)
+					style.WindowBorderHoverPadding = 1.0f;
+				io.FontGlobalScale = 0.8f;
+
+		
+				style.ItemSpacing = ImVec2(4, 2);    
+				style.FramePadding = ImVec2(4, 2);    
+				style.WindowPadding = ImVec2(6, 4);    
+				style.CellPadding = ImVec2(2, 2);     
+				fontLoaded = true;
+			}
 		}
 	}
 
@@ -206,37 +297,16 @@ signed int __stdcall hkPresent(int a1, int a2, int a3)
 		
 		if (g_ShowMenu) {
 		
-			ImGui::SetNextWindowSize(ImVec2(500, 650), ImGuiCond_FirstUseEver);
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 8.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_GrabRounding, 6.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_PopupRounding, 6.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_ScrollbarRounding, 6.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_TabRounding, 6.0f);
-	
-			ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.08f, 0.08f, 0.12f, 0.98f));
-			ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.15f, 0.15f, 0.25f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.25f, 0.25f, 0.35f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.35f, 0.35f, 0.45f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.2f, 0.3f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.4f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.4f, 0.4f, 0.5f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0.0f, 0.8f, 0.4f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_SliderGrab, ImVec4(0.0f, 0.8f, 0.4f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_SliderGrabActive, ImVec4(0.0f, 0.9f, 0.5f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_Tab, ImVec4(0.15f, 0.15f, 0.25f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_TabHovered, ImVec4(0.25f, 0.25f, 0.35f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_TabActive, ImVec4(0.0f, 0.6f, 0.3f, 1.0f));
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.9f, 0.9f, 1.0f));
-			
+			ImGui::SetNextWindowSize(ImVec2(800, 650), ImGuiCond_FirstUseEver);
+			ImGuiManager::darktheme();
+			// it would be nice if u at least keep that instead of renaming :( 
 			ImGui::Begin("Battlefield 3 Internal - https://github.com/antipaster", nullptr, ImGuiWindowFlags_NoCollapse);
 			
 
 			
 		
 			static int selectedTab = 0;
-			const char* tabs[] = { "Combat", "Visuals", "Misc", "Bypass", "Info" };
+			const char* tabs[] = { "Combat", "Visuals", "World", "Misc", "Bypass", "Info" };
 			
 			ImGui::BeginTabBar("##Tabs");
 			for (int i = 0; i < IM_ARRAYSIZE(tabs); i++) {
@@ -261,10 +331,14 @@ signed int __stdcall hkPresent(int a1, int a2, int a3)
 					ImGui::Spacing();
 					
 					ImGui::Checkbox("Enable Aimbot", &g_AimbotConfig.enabled);
+<<<<<<< Updated upstream
 					if (g_AimbotConfig.enabled) {
 						ImGui::SameLine();
 						ImGui::TextColored(ImVec4(0.0f, 0.9f, 0.5f, 1.0f), " ACTIVE");
 					}
+=======
+
+>>>>>>> Stashed changes
 					
 					ImGui::Checkbox("Triggerbot", &g_AimbotConfig.triggerbot);
 					ImGui::Checkbox("Visibility Check", &g_AimbotConfig.visibilityCheck);
@@ -349,6 +423,12 @@ signed int __stdcall hkPresent(int a1, int a2, int a3)
 					ImGui::Checkbox("Show Health Text", &g_ESPConfig.showHealthText);
 					ImGui::Checkbox("Show Player Names", &g_ESPConfig.showPlayerNames);
 					ImGui::Checkbox("Show Offscreen Pointers", &g_ESPConfig.showOffscreenPointers);
+					ImGui::Checkbox("Watermark", &g_ESPConfig.showWatermark);
+					if (g_ESPConfig.showWatermark) {
+						ImGui::Indent();
+						ImGui::Checkbox("Right Side", &g_ESPConfig.watermarkRight);
+						ImGui::Unindent();
+					}
 					
 					ImGui::Spacing();
 					ImGui::Text("Targets:");
@@ -362,10 +442,137 @@ signed int __stdcall hkPresent(int a1, int a2, int a3)
 					ImGui::Text("Box Thickness: %.1f", g_ESPConfig.boxThickness);
 					ImGui::SliderFloat("##Thickness", &g_ESPConfig.boxThickness, 1.0f, 5.0f, "%.1f");
 					
-
+					ImGui::Separator();
+					ImGui::Text("ESP Colors");
+					ImGui::ColorEdit4("Enemy Box Color", (float*)&g_ESPConfig.boxColorEnemy);
+					ImGui::ColorEdit4("Teammate Box Color", (float*)&g_ESPConfig.boxColorTeammate);
+					ImGui::ColorEdit4("Occluded Box Color", (float*)&g_ESPConfig.boxColorOccluded);
+					ImGui::ColorEdit4("Name Color", (float*)&g_ESPConfig.nameColor);
+					ImGui::ColorEdit4("Health Bar Color", (float*)&g_ESPConfig.healthBarColor);
+					ImGui::ColorEdit4("Offscreen Pointer Color", (float*)&g_ESPConfig.offscreenPointerColor);
+					
+					ImGui::Separator();
+					ImGui::Text("Vehicle ESP");
+					ImGui::Checkbox("Enable Vehicle ESP", &g_VehicleESPConfig.enabled);
+					ImGui::Checkbox("Boxes##vehicle", &g_VehicleESPConfig.showBoxes);
+					ImGui::Checkbox("Health Bars##vehicle", &g_VehicleESPConfig.showHealthBars);
+					ImGui::Checkbox("Names##vehicle", &g_VehicleESPConfig.showNames);
+					ImGui::Checkbox("Distance##vehicle", &g_VehicleESPConfig.showDistance);
+					ImGui::Checkbox("Health Text##vehicle", &g_VehicleESPConfig.showHealthText);
+					ImGui::SliderFloat("Max Distance##vehicle", &g_VehicleESPConfig.maxDistance, 50.0f, 1000.0f);
+					ImGui::SliderFloat("Box Thickness##vehicle", &g_VehicleESPConfig.boxThickness, 1.0f, 5.0f);
+					ImGui::ColorEdit4("Vehicle Box Color", (float*)&g_VehicleESPConfig.boxColor);
+					ImGui::ColorEdit4("Vehicle Name Color", (float*)&g_VehicleESPConfig.nameColor);
+					ImGui::ColorEdit4("Vehicle Health Bar Color", (float*)&g_VehicleESPConfig.healthBarColor);
+					
 					break;
 				}
-				case 2: {
+				case 2: { 
+					ImGui::TextColored(ImVec4(0.0f, 0.9f, 0.5f, 1.0f), "World Customization");
+					ImGui::Separator();
+					ImGui::Spacing();
+					
+					ImGui::Checkbox("Enable World Modifications", &g_WorldConfig.enabled);
+					if (g_WorldConfig.enabled) {
+						ImGui::SameLine();
+						ImGui::TextColored(ImVec4(0.0f, 0.8f, 0.0f, 1.0f), "[ON]");
+					}
+					
+					ImGui::Spacing();
+					ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "Rendering Features");
+					ImGui::Spacing();
+					
+					ImGui::Checkbox("Remove Shadows", &g_WorldConfig.removeShadows);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Disable all shadow rendering");
+					
+					ImGui::Checkbox("Remove Foliage", &g_WorldConfig.removeFoliage);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Remove grass and trees");
+					
+					ImGui::Checkbox("Remove Sky", &g_WorldConfig.removeSky);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Disable sky rendering");
+					
+					ImGui::Checkbox("Remove Sun", &g_WorldConfig.removeSun);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Disable sun lighting");
+					
+					ImGui::Checkbox("Remove Reflections", &g_WorldConfig.removeReflections);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Disable reflection rendering");
+					
+					ImGui::Checkbox("Remove Bloom", &g_WorldConfig.removeBloom);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Disable bloom effects");
+					
+					ImGui::Checkbox("Remove Motion Blur", &g_WorldConfig.removeMotionBlur);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Disable motion blur");
+					
+					ImGui::Checkbox("Remove Depth of Field", &g_WorldConfig.removeDepthOfField);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Disable depth of field");
+					
+					ImGui::Spacing();
+					ImGui::Separator();
+					ImGui::Spacing();
+					
+					ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "Performance Optimizations");
+					ImGui::Spacing();
+					
+					ImGui::Checkbox("Performance Mode", &g_WorldConfig.enablePerformanceMode);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Disable expensive features");
+					
+
+					
+					ImGui::Spacing();
+					ImGui::Separator();
+					ImGui::Spacing();
+					
+					ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "Debug Features");
+					ImGui::Spacing();
+					
+					ImGui::Checkbox("Debug Multi View", &g_WorldConfig.debugMultiView);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Show debug rendering info");
+					
+					ImGui::Checkbox("Debug Draw Depth", &g_WorldConfig.debugDrawDepth);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Show depth buffer");
+					
+					ImGui::Checkbox("Debug Draw Emitters", &g_WorldConfig.debugDrawEmitters);
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Show particle emitters");
+					
+					ImGui::Spacing();
+					ImGui::Separator();
+					ImGui::Spacing();
+					
+		
+					ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "Quick Presets");
+					ImGui::Spacing();
+					
+					if (ImGui::Button("Performance", ImVec2(120, 25))) {
+						g_WorldConfig.removeShadows = true;
+						g_WorldConfig.removeFoliage = true;
+						g_WorldConfig.removeReflections = true;
+						g_WorldConfig.removeBloom = true;
+						g_WorldConfig.removeMotionBlur = true;
+						g_WorldConfig.removeDepthOfField = true;
+						g_WorldConfig.enablePerformanceMode = true;
+						g_WorldConfig.enabled = true;
+					}
+					ImGui::SameLine();
+					if (ImGui::Button("Reset All", ImVec2(120, 25))) {
+						g_WorldConfig = {};
+						g_WorldConfig.enabled = false;
+					}
+					
+					break;
+				}
+				case 3: {
 					ImGui::TextColored(ImVec4(0.0f, 0.9f, 0.5f, 1.0f), "Misc Settings");
 					ImGui::Separator();
 					ImGui::Spacing();
@@ -375,14 +582,16 @@ signed int __stdcall hkPresent(int a1, int a2, int a3)
 						PrintAllEntitiesToConsole();
 					}
 					
-				
-					if (ImGui::CollapsingHeader("Misc")) {
-						ImGui::Checkbox("Auto Crouch", &g_MiscConfig.autoCrouch);
-					}
-
+					ImGui::Spacing();
+					ImGui::Checkbox("Auto Crouch", &g_MiscConfig.autoCrouch);
+					ImGui::Separator();
+					ImGui::Text("Unlocks:");
+					ImGui::Checkbox("Unlock All Weapons/Attachments", &g_unlocks.unlockAll);
+					ImGui::Checkbox("Unlock All Camos/Gadgets/Assignments/Dogtags", &g_unlocks.unlockAllExtras);
+					ImGui::Checkbox("Spoof Unlock Checks (hasUnlockAsset/isUnlocked)", &g_unlocks.spoofUnlockChecks);
 					break;
 				}
-				case 3: { 
+				case 4: { 
 					ImGui::TextColored(ImVec4(0.0f, 0.9f, 0.5f, 1.0f), "Bypass Features");
 					ImGui::Separator();
 					ImGui::Spacing();
@@ -410,7 +619,7 @@ signed int __stdcall hkPresent(int a1, int a2, int a3)
 					ImGui::Text("Original Name: %s", NameSpoofer::GetOriginalName());
 					break;
 				}
-				case 4: { 
+				case 5: { 
 					ImGui::TextColored(ImVec4(0.0f, 0.9f, 0.5f, 1.0f), "Information");
 					ImGui::Separator();
 					ImGui::Spacing();
@@ -463,11 +672,37 @@ signed int __stdcall hkPresent(int a1, int a2, int a3)
 			}
 			
 		
-			ImGui::PopStyleColor(14);
-			ImGui::PopStyleVar(7);
 			ImGui::End();
 		} else {
 			OutputDebugStringA("[Main] Menu is hidden (g_ShowMenu = false)\n");
+		}
+		if (g_ESPConfig.showWatermark) {
+			ImGuiIO& io = ImGui::GetIO();
+			char watermarkText[256] = "BF3 Internal | github.com/antipaster";
+			char extra[128] = "";
+			SYSTEMTIME st;
+			GetLocalTime(&st);
+			char timeStr[32];
+			sprintf(timeStr, " | %02d:%02d:%02d", st.wHour, st.wMinute, st.wSecond);
+			strcat(extra, timeStr);
+			const char* username = "Unknown";
+			if (fb::ClientGameContext::Singleton() && fb::ClientGameContext::Singleton()->m_clientPlayerManager && fb::ClientGameContext::Singleton()->m_clientPlayerManager->m_localPlayer) {
+				username = fb::ClientGameContext::Singleton()->m_clientPlayerManager->m_localPlayer->m_name.c_str();
+			}
+			strcat(extra, " | ");
+			strcat(extra, username);
+			strcat(watermarkText, extra);
+			ImVec2 textSize = ImGui::CalcTextSize(watermarkText);
+			float margin = 20.0f;
+			ImVec2 pos = ImVec2(margin, 10.0f);
+			if (g_ESPConfig.watermarkRight) {
+				pos.x = io.DisplaySize.x - textSize.x - margin - 20;
+			}
+			ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
+			ImGui::SetNextWindowBgAlpha(0.4f);
+			ImGui::Begin("##watermark", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
+			ImGui::Text("%s", watermarkText);
+			ImGui::End();
 		}
 		ImGui::Render();
 		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -544,7 +779,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     }
     return TRUE;
 }
-
+// chatgpt 
 void PrintAllEntitiesToConsole() {
     printf("[ESP] Starting entity scan...\n");
     
@@ -599,3 +834,125 @@ void PrintAllEntitiesToConsole() {
     
     printf("[ESP] Total entities found: %d\n", entityCount);
 }
+<<<<<<< Updated upstream
+=======
+
+void ApplyWorldColors() {
+    fb::ClientGameContext* g_pGameContext = fb::ClientGameContext::Singleton();
+    if (!POINTERCHK(g_pGameContext)) {
+        return;
+    }
+    
+
+    fb::ClientLevel* level = g_pGameContext->m_level;
+    if (!POINTERCHK(level) || !POINTERCHK(level->m_worldRenderModule)) {
+        return;
+    }
+    
+    fb::WorldRenderModule* worldRenderModule = level->m_worldRenderModule;
+    if (!POINTERCHK(worldRenderModule->m_worldRenderer) || !POINTERCHK(worldRenderModule->m_worldRenderer->m_worldRenderSettings)) {
+        return;
+    }
+    
+    fb::WorldRenderSettings* worldSettings = worldRenderModule->m_worldRenderer->m_worldRenderSettings;
+    
+    if (!g_WorldConfig.enabled) {
+        worldSettings->m_drawShadows = true;
+        worldSettings->m_lightShadows = true;
+        worldSettings->m_moreShadows = true;
+        worldSettings->m_smokeShadows = true;
+        worldSettings->m_drawFoliage = true;
+        worldSettings->m_skyEnable = true;
+        worldSettings->m_sunEnabled = true;
+        worldSettings->m_drawReflection = true;
+        worldSettings->m_fluorescentBloom = true;
+        worldSettings->m_depthOfField = true;
+        worldSettings->m_drawLight = true;
+        worldSettings->m_lightEnabledAgain = true;
+        worldSettings->m_somethingLighting = true;
+        worldSettings->m_unlitEnable = false;
+        worldSettings->m_debugMultiView = false;
+        worldSettings->m_debugDrawDepth = false;
+        worldSettings->m_debugDrawEmitters = false;
+        
+
+        
+        if (POINTERCHK(level->m_vegetationManager)) {
+            fb::VegetationSystemSettings* vegSettings = level->m_vegetationManager->m_settings;
+            if (POINTERCHK(vegSettings)) {
+                vegSettings->m_drawEnable = true;
+                vegSettings->m_enable = true;
+            }
+        }
+        
+        printf("[World] Reset to default settings\n");
+        return;
+    }
+    
+    if (g_WorldConfig.removeShadows) {
+        worldSettings->m_drawShadows = false;
+        worldSettings->m_lightShadows = false;
+        worldSettings->m_moreShadows = false;
+        worldSettings->m_smokeShadows = false;
+    } else {
+        worldSettings->m_drawShadows = true;
+        worldSettings->m_lightShadows = true;
+        worldSettings->m_moreShadows = true;
+        worldSettings->m_smokeShadows = true;
+    }
+    
+    if (g_WorldConfig.removeFoliage) {
+        worldSettings->m_drawFoliage = false;
+        if (POINTERCHK(level->m_vegetationManager)) {
+            fb::VegetationSystemSettings* vegSettings = level->m_vegetationManager->m_settings;
+            if (POINTERCHK(vegSettings)) {
+                vegSettings->m_drawEnable = false;
+                vegSettings->m_enable = false;
+            }
+        }
+    } else {
+        worldSettings->m_drawFoliage = true;
+        if (POINTERCHK(level->m_vegetationManager)) {
+            fb::VegetationSystemSettings* vegSettings = level->m_vegetationManager->m_settings;
+            if (POINTERCHK(vegSettings)) {
+                vegSettings->m_drawEnable = true;
+                vegSettings->m_enable = true;
+            }
+        }
+    }
+    
+
+
+	// its dumb i know
+
+worldSettings->m_skyEnable          = !g_WorldConfig.removeSky;
+worldSettings->m_sunEnabled         = !g_WorldConfig.removeSun;
+worldSettings->m_drawReflection     = !g_WorldConfig.removeReflections;
+worldSettings->m_fluorescentBloom   = !g_WorldConfig.removeBloom;
+worldSettings->m_depthOfField       = !g_WorldConfig.removeDepthOfField;
+
+
+if (g_WorldConfig.removeMotionBlur) {
+    worldSettings->m_motionBlurScale = 0.0f;
+    worldSettings->m_motionBlurMax   = 0.0f;
+} else {
+    worldSettings->m_motionBlurScale = 1.0f;
+    worldSettings->m_motionBlurMax   = 1.0f;
+}
+
+
+if (g_WorldConfig.enablePerformanceMode) {
+    worldSettings->m_drawReflection    = false;
+    worldSettings->m_fluorescentBloom  = false;
+    worldSettings->m_depthOfField      = false;
+    worldSettings->m_motionBlurScale   = 0.0f;
+    worldSettings->m_motionBlurMax     = 0.0f;
+}
+
+
+worldSettings->m_debugMultiView    = g_WorldConfig.debugMultiView;
+worldSettings->m_debugDrawDepth    = g_WorldConfig.debugDrawDepth;
+worldSettings->m_debugDrawEmitters = g_WorldConfig.debugDrawEmitters;
+
+}
+>>>>>>> Stashed changes
